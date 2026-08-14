@@ -4,10 +4,18 @@
 //   agentchat init [--name <n>] [--device <d>]   identity + team roster entry
 //   agentchat id                                 print this machine's identity
 //   agentchat status [peer]                      presence, or one peer's live status
+//   agentchat ask <peer> "<question>"            ask a peer's live agent (blocks for the answer)
+//   agentchat send <peer> "<text>"               fire-and-forget message
+//   agentchat inbox                              queued incoming messages, newest first
+//   agentchat reply <id> "<answer>"              answer a pending ask
+//   agentchat set-status "<line>"                authored status line ("" clears)
+//   agentchat install [--project]                install the skill into detected harnesses
 //   agentchat daemon                             run the daemon in the foreground
 //
-// `status` talks to the daemon over its control socket and auto-spawns it
-// (detached, logging to <cfg>/daemon.log) when it isn't running.
+// Commands talk to the daemon over its control socket and auto-spawn it
+// (detached, logging to <cfg>/daemon.log) when it isn't running. When run
+// from inside a Claude Code session, the session's messaging inbox is
+// registered with the daemon so incoming asks can be injected into it.
 
 import { openSync } from "node:fs";
 import { join } from "node:path";
@@ -64,6 +72,14 @@ function controlRequest(req: object, timeoutMs = 15_000): Promise<any> {
       reject(err);
     });
   });
+}
+
+/** Runs inside an agent session? Register its inbox so asks can reach it. */
+async function registerSessionIfAny(): Promise<void> {
+  const socket = process.env.CLAUDE_CODE_MESSAGING_SOCKET;
+  const token = process.env.CLAUDE_CODE_MESSAGING_TOKEN;
+  if (!socket || !token) return;
+  await controlRequest({ cmd: "register-session", socket, token }, 3_000).catch(() => {});
 }
 
 async function ensureDaemon(): Promise<void> {
@@ -164,8 +180,92 @@ switch (cmd) {
     break;
   }
 
+  case "ask": {
+    const [peer, ...q] = rest;
+    const question = q.join(" ").trim();
+    if (!peer || !question) {
+      console.error('usage: agentchat ask <peer> "<question>"');
+      process.exit(1);
+    }
+    await ensureDaemon();
+    await registerSessionIfAny();
+    console.error(`asking ${peer}'s agent (may take a minute or two)…`);
+    const res = await controlRequest({ cmd: "ask", peer, question }, 140_000);
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    console.log(res.answer);
+    break;
+  }
+
+  case "send": {
+    const [peer, ...t] = rest;
+    const text = t.join(" ").trim();
+    if (!peer || !text) {
+      console.error('usage: agentchat send <peer> "<text>"');
+      process.exit(1);
+    }
+    await ensureDaemon();
+    await registerSessionIfAny();
+    const res = await controlRequest({ cmd: "send", peer, text }, 20_000);
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    console.log(`sent (${res.note})`);
+    break;
+  }
+
+  case "inbox": {
+    await ensureDaemon();
+    await registerSessionIfAny();
+    const res = await controlRequest({ cmd: "inbox", markRead: true });
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    if (res.inbox.length === 0) {
+      console.log("inbox empty");
+      break;
+    }
+    for (const m of res.inbox) {
+      const flag = m.kind === "ask" ? (m.answered ? "ask✓" : "ask?") : "msg ";
+      const when = age(Math.round((Date.now() - m.ts) / 1000));
+      console.log(`${m.read ? " " : "•"} [${flag}] ${m.id} ${m.from} (${when}): ${m.text}`);
+    }
+    console.log(`\nanswer an open ask with: agentchat reply <id> "<answer>"`);
+    break;
+  }
+
+  case "reply": {
+    const [id, ...a] = rest;
+    const answer = a.join(" ").trim();
+    if (!id || !answer) {
+      console.error('usage: agentchat reply <id> "<answer>"');
+      process.exit(1);
+    }
+    await ensureDaemon();
+    const res = await controlRequest({ cmd: "reply", id, answer });
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    console.log("reply delivered");
+    break;
+  }
+
+  case "set-status": {
+    await ensureDaemon();
+    await registerSessionIfAny();
+    const res = await controlRequest({ cmd: "set-status", line: rest.join(" ").trim() });
+    console.log(res.ok ? "status set" : `error: ${res.error}`);
+    break;
+  }
+
   case "status": {
     await ensureDaemon();
+    await registerSessionIfAny();
     const peer = rest.find((a) => !a.startsWith("--"));
     if (peer) {
       const res = await controlRequest({ cmd: "status", peer });
@@ -185,7 +285,13 @@ switch (cmd) {
     break;
   }
 
+  case "install": {
+    const { installSkill } = await import("./install");
+    installSkill({ project: rest.includes("--project") });
+    break;
+  }
+
   default:
-    console.log("usage: agentchat <init|id|status [peer]|daemon>");
+    console.log('usage: agentchat <init|id|status [peer]|ask|send|inbox|reply|set-status|install|daemon>');
     process.exit(cmd ? 1 : 0);
 }

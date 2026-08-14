@@ -27,6 +27,37 @@ export interface StatusRequest {
   t: "status?";
 }
 
+/** A question routed to the peer's live agent session; replied on the same stream. */
+export interface AskRequest {
+  t: "ask";
+  id: string;
+  from: string; // "name@device"
+  question: string;
+}
+
+export interface AskReply {
+  t: "ask-reply";
+  id: string;
+  ok: boolean;
+  answer: string | null;
+  error?: string;
+}
+
+/** Fire-and-forget message; acked on the same stream. */
+export interface SendMsg {
+  t: "send";
+  id: string;
+  from: string;
+  text: string;
+}
+
+export interface SendAck {
+  t: "send-ack";
+  id: string;
+  queued: boolean;
+  note?: string;
+}
+
 export interface StatusReply {
   t: "status";
   name: string;
@@ -36,7 +67,7 @@ export interface StatusReply {
   git: GitState;
 }
 
-export type Envelope = PresenceBeacon | StatusRequest | StatusReply;
+export type Envelope = PresenceBeacon | StatusRequest | StatusReply | AskRequest | AskReply | SendMsg | SendAck;
 
 export function encode(e: Envelope): number[] {
   const bytes = [...new TextEncoder().encode(JSON.stringify(e))];

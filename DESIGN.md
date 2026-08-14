@@ -8,9 +8,9 @@ Working name: **agentchat** (CLI: `agentchat`). Sibling of [tmeet](https://githu
 
 Claude Code sessions can already ask each other "what are you doing?" — but only Claude, and cross-machine only via Anthropic's servers. Meanwhile a small team (2–5 people) working the same repo has no way for *my* agent to know that *John's* agent is mid-refactor on the same files. GitHub only shows pushed work; the freshest state of a teammate's work lives in their local checkout, and the best interface to that state is their agent.
 
-agentchat gives every developer machine a small daemon that:
+agentchat gives every developer machine a small daemon and a CLI that:
 
-- exposes the local agents (any vendor) a set of MCP tools — `team_status`, `ask`, `send`, `set_status`, `broadcast`;
+- lets any agent, any vendor, coordinate by running plain CLI commands — `agentchat status`, `agentchat ask john "…"`, `agentchat set-status "…"` — no per-harness integration, no protocol server: if it has a shell, it works;
 - connects to teammates' daemons **directly, peer-to-peer**, dialing by public key;
 - answers cheap questions itself (branch, dirty files, recent commits) without waking anyone's agent, and routes real questions into the teammate's live agent session;
 - shows a live TUI of who's online and what everyone (and their agents) is working on.
@@ -90,11 +90,11 @@ Plain text (JSON envelope) only. No file transfer, no history sync in v1.
 
 ```
                  ┌──────────── this machine ────────────┐
- Claude Code ────┤ MCP (stdio)          UDS inbox ◄─────┤ inject incoming
- Codex CLI ──────┤ MCP                                  │
- Cursor ─────────┤ MCP        agentchat daemon          │
- TUI (`agentchat`)── local IPC      │                   │
-                 └──────────────────┼───────────────────┘
+ Claude Code ────┤ runs `agentchat …`   UDS inbox ◄─────┤ inject incoming
+ Codex CLI ──────┤ runs `agentchat …`                   │
+ Cursor ─────────┤ runs `agentchat …`  agentchat daemon │
+ TUI (`agentchat`)── control socket      │              │
+                 └───────────────────────┼──────────────┘
                                     ║ iroh: QUIC by pubkey, ~90% direct,
                                     ║ encrypted relay fallback, gossip topics
                           John's daemon ── John's agents
@@ -115,11 +115,13 @@ One per machine (`agentchat daemon`, auto-started by the CLI/TUI/MCP server when
 
 Why not extend tmeet's werift/WebRTC stack: that's a 1:1 media pipeline with hand-rolled signaling; agentchat needs an N-peer data mesh with identity — everything werift would need bolted on is what iroh ships.
 
-### Agent integration: MCP + skills
+### Agent integration: CLI + skills, nothing else
 
-- **`agentchat mcp`** — stdio MCP server (thin client to the daemon). Tools: `team_status`, `ask(peer, question)`, `send(peer, message)`, `set_status(line)`, `broadcast(message)`, `list_peers`. Works in every MCP-speaking harness, which is all of them.
-- **Skills make it automatic.** The MCP server is capability; the skill is habit. A small skill (per-harness format: Claude Code skill, Codex/Cursor equivalents) teaches: set your status when starting/finishing a task; check `team_status` before editing files a teammate may hold; `ask` instead of assuming; consider delegating when a peer's agent is idle.
-- **`agentchat install`** — detects installed harnesses and writes both the MCP registration and the skill for each. `agentchat install --project` scopes to the current repo.
+Deliberately **no MCP server, no SDK, no per-harness protocol glue**. Agents integrate the way humans do — by running the CLI. Every coding agent has a shell tool; `agentchat status` works identically from Claude Code, Codex, Cursor, aider, or a cron job. This keeps the surface open (any harness, present or future), clean (one interface to document and test), and honest (everything an agent can do, a human can do and audit).
+
+- **The CLI is the capability; the skill is the habit.** A small skill (per-harness format) teaches: set your status when starting/finishing a task (`agentchat set-status`); check `agentchat status` before editing files a teammate may hold; `agentchat ask` instead of assuming; check `agentchat inbox` when prompted.
+- **Session registration falls out for free**: when a Claude Code session runs any agentchat command, the CLI sees that session's messaging-inbox env (`CLAUDE_CODE_MESSAGING_SOCKET`/`TOKEN`) and registers it with the daemon — so incoming asks can later be injected into that live session, with zero discovery machinery.
+- **`agentchat install`** — writes the skill into detected harnesses (`~/.claude/skills/`, project `.claude/skills/`, Codex/Cursor equivalents). That's all install does.
 
 ### TUI
 
@@ -145,7 +147,10 @@ agentchat join <code>     # accept a pairing invite
 agentchat status [peer]   # one-shot presence / peer status
 agentchat ask <peer> "…"  # ask a peer's agent a question (human-initiated)
 agentchat send <peer> "…" # send a message
-agentchat install         # register MCP server + skills into detected harnesses
+agentchat set-status "…"  # set the authored status line (agents run this)
+agentchat inbox           # read queued incoming messages
+agentchat reply <id> "…"  # answer a pending ask
+agentchat install         # install the skill into detected harnesses
 agentchat daemon          # run the daemon in foreground (usually auto-spawned)
 ```
 
@@ -153,7 +158,7 @@ agentchat daemon          # run the daemon in foreground (usually auto-spawned)
 
 - **M0 — spike (de-risk): ✅ done** (`spike/peer.ts`, `spike/presence.ts`). Proved on real hardware: `@number0/iroh` 1.1.0 runs under Bun; JSON envelopes over bi streams; dial by ticket connects DIRECT in ~10ms locally; dial by **bare public key** works via n0 discovery — first connect lands on the relay (~800ms), then upgrades to a direct path mid-exchange; a 3-process full-mesh sees every peer's presence beacons within two 2s heartbeats given only a shared roster of keys.
 - **M1 — daemon + status: ✅ done.** Identity (`~/.agentchat/identity.json`, `$AGENTCHAT_HOME` override), `agentchat init` (identity + repo roster), roster module (team + contacts, TOML), git state collector, daemon (persistent-key endpoint, roster-gated inbound — unknown keys refused before parsing, full-mesh beacons, daemon-answered `status?`, Unix control socket), CLI (`init`/`id`/`status [peer]`/`daemon`, auto-spawn). Verified end-to-end: two daemons with separate identities and clones, alice sees `● bob@thinkpad repo-b@feat/login (3 dirty)` and `status bob` returns his real branch/dirty/commits. 12 unit tests. Still M1-scoped: daemon serves the repo it started in; `status` answers only from git state.
-- **M2 — agents in the loop:** MCP server + tools; Claude Code UDS injection for `ask`/`send`; skills; `agentchat install`. Two people's Claude sessions coordinate on one repo — the demo.
+- **M2 — agents in the loop: ✅ done.** `ask`/`send`/`inbox`/`reply`/`set-status` CLI commands; session auto-registration (CLI captures `CLAUDE_CODE_MESSAGING_SOCKET`/`TOKEN` when an agent runs any command); injection via the documented inbox protocol (auth frame + `{"type":"user","message":{…}}` line, format confirmed from the Claude Code binary); the skill (`skill/SKILL.md`); `agentchat install [--project]`. Verified end-to-end: alice's `ask` was injected into bob's session, whose scripted agent ran `agentchat reply`, and the answer came back over the same held-open bi stream (~full loop in seconds); injection was additionally validated against a *real* Claude Code session by accident — the dev session's own inbox received a test ask, correctly enveloped. Authored status lines propagate in presence beacons. Ask timeout 120s; unanswered asks stay in the inbox.
 - **M3 — TUI:** live dashboard, contacts pairing flow, inbound hold/approve UX.
 - **M4 — breadth:** Codex/Cursor/opencode injection adapters, delegation patterns in the skill, polish, `npm i -g` distribution (prebuilt binaries, tmeet-style).
 
