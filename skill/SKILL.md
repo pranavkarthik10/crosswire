@@ -39,9 +39,16 @@ crosswire ask john "are you already changing the session middleware? I'm about t
 ```
 
 `ask` routes the question to the teammate's live agent and blocks until it
-answers (up to ~2 minutes). Use it to avoid duplicate work, agree on who takes
-what, or get the freshest state of their local changes. For a note that needs
-no answer, use `crosswire send john "..."`.
+answers (up to ~2 minutes). If no agent is live over there, the reply may be
+a deterministic digest of their recent session history (marked as such) —
+interpret those facts yourself and verify before relying on them. Use `ask`
+to avoid duplicate work, agree on who takes what, or get the freshest state
+of their local changes. For a note that needs no answer, use
+`crosswire send john "..."`.
+
+`crosswire recap` shows what OTHER agent sessions on this machine (any
+harness) recently did in this repo — check it when starting work so you
+don't redo or undo what another local agent just built.
 
 ## Answering
 

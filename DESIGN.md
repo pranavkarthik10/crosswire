@@ -78,7 +78,7 @@ Presence is **full-mesh, not gossip**: each daemon holds a QUIC connection to ev
 Three verbs over the wire, all E2E-encrypted QUIC:
 
 - `status` — request/response, answered **by the daemon** from local state (branch, dirty files, last commits, sessions + their authored statuses). Never wakes an agent; fast enough that agents pre-flight it habitually.
-- `ask` — a question routed into a specific live agent session on the peer machine ("what's your plan for the auth refactor?"). The answer comes from the agent itself.
+- `ask` — a question routed into a specific live agent session on the peer machine ("what's your plan for the auth refactor?"). The answer comes from the agent itself. With nobody live, the fallback chain is: shim-fed sessions (short grace) → **session-history digest** — the daemon answers deterministically from the transcripts every harness writes on disk (`~/.claude/projects`, `~/.codex/sessions`, …): recent prompts, files touched, last activity; instant, free, and the asker's agent interprets the facts → wake a read-only agent, last resort only, when there's no history and peer policy allows spending usage. `crosswire recap` exposes the same digest locally — your Claude can read what your Codex session did, and vice versa, no network involved.
 - `send` — fire-and-forget message to a peer's agent or human (shows in TUI; injected into the agent if addressed to one).
 
 Plain text (JSON envelope) only. No file transfer, no history sync in v1.

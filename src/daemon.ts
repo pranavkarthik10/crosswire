@@ -20,6 +20,7 @@ import { configDir, loadIdentity, type Identity } from "./identity";
 import { injectClaude, type RegisteredSession } from "./inject";
 import { policyFor, setPolicy } from "./policy";
 import { addContact, visiblePeers, type PeerEntry } from "./roster";
+import { collectRecap, formatRecap } from "./sessionlog";
 import { sessionsForRepo, discoverSessions } from "./sessions";
 import { appendInbox, loadInbox, loadRepos, touchRepo, updateInbox } from "./store";
 import { wakeAndAsk } from "./wake";
@@ -341,28 +342,40 @@ export class Daemon {
 
     const injected = await this.tryInject(prompt);
     if (!injected) {
+      // Fallback chain: spool for shim sessions (short grace) -> session-
+      // history digest (deterministic, instant, free — the asker's agent
+      // interprets the facts) -> wake a read-only agent, last resort only,
+      // when there is no history and policy allows spending usage.
       const shims = this.shimsInstalled();
       if (shims) this.writeSpool({ id, from, prompt, ts: Date.now() });
       const repo = this.activeRepo();
-      if (!shims && !mayWake) {
-        this.pendingAsks.delete(id);
-        return { t: "ask-reply", id, ok: false, answer: null, error: "no live agent session; wake disabled by peer policy — question queued to inbox" };
-      }
       if (!shims && !repo) {
         this.pendingAsks.delete(id);
         return { t: "ask-reply", id, ok: false, answer: null, error: "no live agent session and no registered repo — question queued to inbox" };
       }
-      if (mayWake && repo) {
-        (async () => {
-          if (shims) await Bun.sleep(8_000); // grace: let a live shim session take it first
-          if (!this.pendingAsks.has(id)) return;
-          const woken = await wakeAndAsk({ repoRoot: repo, from, question, timeoutMs: ASK_TIMEOUT_MS - 20_000 });
-          const pending = this.pendingAsks.get(id);
-          if (!pending) return; // someone answered while the wake ran
-          if (woken.ok) pending({ t: "ask-reply", id, ok: true, answer: `${woken.answer}\n\n(answered by a woken read-only ${woken.harness} agent — no live session)` });
-          else pending({ t: "ask-reply", id, ok: false, answer: null, error: `no live session; wake-on-ask failed: ${woken.error}` });
-        })().catch(() => {});
-      }
+      (async () => {
+        if (shims) await Bun.sleep(8_000); // grace: a live shim session may take it
+        if (!this.pendingAsks.has(id)) return;
+        const digest = repo ? formatRecap(collectRecap(repo)) : "";
+        if (digest) {
+          this.pendingAsks.get(id)?.({
+            t: "ask-reply",
+            id,
+            ok: true,
+            answer: `No agent is live here right now. Recent session history for this repo (deterministic digest — no agent was consulted; interpret and verify yourself):\n\n${digest}`,
+          });
+          return;
+        }
+        if (!mayWake || !repo) {
+          this.pendingAsks.get(id)?.({ t: "ask-reply", id, ok: false, answer: null, error: "no live agent session and no session history — question queued to inbox" });
+          return;
+        }
+        const woken = await wakeAndAsk({ repoRoot: repo, from, question, timeoutMs: ASK_TIMEOUT_MS - 20_000 });
+        const pending = this.pendingAsks.get(id);
+        if (!pending) return; // someone answered while the wake ran
+        if (woken.ok) pending({ t: "ask-reply", id, ok: true, answer: `${woken.answer}\n\n(answered by a woken read-only ${woken.harness} agent — no live session)` });
+        else pending({ t: "ask-reply", id, ok: false, answer: null, error: `no live session; wake-on-ask failed: ${woken.error}` });
+      })().catch(() => {});
     }
     return answerP;
   }
@@ -474,6 +487,11 @@ export class Daemon {
         case "set-status":
           this.statusLine = typeof req.line === "string" && req.line.length > 0 ? req.line.slice(0, 200) : null;
           return { ok: true };
+        case "recap": {
+          const repo = this.activeRepo();
+          if (!repo) return { ok: false, error: "no registered repo" };
+          return { ok: true, recap: collectRecap(repo), digest: formatRecap(collectRecap(repo)) };
+        }
         case "invite": {
           const secret = randomBytes(8).toString("hex");
           this.invites.set(secret, Date.now() + 10 * 60_000); // 10 min, single use

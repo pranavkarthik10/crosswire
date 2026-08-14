@@ -313,6 +313,18 @@ switch (cmd) {
     break;
   }
 
+  case "recap": {
+    await ensureDaemon();
+    await registerContext();
+    const res = await controlRequest({ cmd: "recap" });
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    console.log(res.digest || "no recent agent sessions in this repo");
+    break;
+  }
+
   case "invite": {
     await ensureDaemon();
     const res = await controlRequest({ cmd: "invite" }, 20_000);
