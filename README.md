@@ -22,12 +22,18 @@ bun install -g crosswire   # or: clone && bun link
 cd your-repo
 crosswire init             # identity + roster entry; commit .crosswire/
 crosswire install          # skill into ~/.claude/skills
+crosswire service install  # daemon from login onward (launchd/systemd)
 
-crosswire status           # who's online, on what
+crosswire                  # live dashboard: who's online, on what
+crosswire status john      # john's live branch/dirty files/commits
 crosswire ask john "are you already changing the session middleware?"
 ```
 
-Teammates: clone, `crosswire init`, commit the roster, done.
+Teammates: clone, `crosswire init`, commit the roster, done. If a session of their agent is live in that repo, your `ask` lands in it; if not, their daemon wakes a read-only agent so the answer still reflects their actual working tree.
+
+For a collaborator outside any shared repo: `crosswire invite` → they run the printed `crosswire join <code>` (single-use, 10 minutes, pure P2P) — now you're contacts.
+
+Control what a peer may do on your machine: `crosswire peer <name> --inbound accept|hold|refuse --wake on|off`.
 
 ## Security model (short version)
 

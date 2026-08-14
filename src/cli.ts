@@ -300,6 +300,60 @@ switch (cmd) {
     break;
   }
 
+  case "invite": {
+    await ensureDaemon();
+    const res = await controlRequest({ cmd: "invite" }, 20_000);
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    console.log(`invite code (10 min, single use) — send it to your contact:\n`);
+    console.log(`  crosswire join ${res.code}\n`);
+    console.log(`keep this terminal's daemon running until they join.`);
+    break;
+  }
+
+  case "join": {
+    const code = rest[0];
+    if (!code) {
+      console.error("usage: crosswire join <code>");
+      process.exit(1);
+    }
+    await ensureDaemon();
+    const res = await controlRequest({ cmd: "join", code }, 40_000);
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    console.log(`paired with ${res.contact.name}@${res.contact.device} — they're in your contacts now.`);
+    break;
+  }
+
+  case "peer": {
+    const peer = rest[0];
+    const inbound = flag(rest, "inbound");
+    const wakeFlag = flag(rest, "wake");
+    if (!peer || (!inbound && !wakeFlag)) {
+      console.error('usage: crosswire peer <name> [--inbound accept|hold|refuse] [--wake on|off]');
+      process.exit(1);
+    }
+    if (inbound && !["accept", "hold", "refuse"].includes(inbound)) {
+      console.error("--inbound must be accept, hold or refuse");
+      process.exit(1);
+    }
+    await ensureDaemon();
+    const req: Record<string, unknown> = { cmd: "peer-policy", peer };
+    if (inbound) req.inbound = inbound;
+    if (wakeFlag) req.wake = wakeFlag === "on";
+    const res = await controlRequest(req);
+    if (!res.ok) {
+      console.error(`error: ${res.error}`);
+      process.exit(1);
+    }
+    for (const a of res.applied) console.log(`${a.peer}: inbound=${a.policy.inbound} wake=${a.policy.wake ? "on" : "off"}`);
+    break;
+  }
+
   case "service": {
     const { serviceInstall, serviceUninstall } = await import("./service");
     const sub = rest[0];
@@ -312,7 +366,16 @@ switch (cmd) {
     break;
   }
 
+  case undefined: {
+    // no subcommand: the live dashboard
+    await ensureDaemon();
+    await registerContext();
+    const { runTui } = await import("./tui");
+    await runTui({ sockPath: Daemon.sockPath(cfg) });
+    break;
+  }
+
   default:
-    console.log('usage: crosswire <init|id|status [peer]|ask|send|inbox|reply|set-status|install|service|daemon>');
-    process.exit(cmd ? 1 : 0);
+    console.log('usage: crosswire <init|id|status [peer]|ask|send|inbox|reply|set-status|invite|join|peer|install|service|daemon>  (no args: dashboard)');
+    process.exit(1);
 }

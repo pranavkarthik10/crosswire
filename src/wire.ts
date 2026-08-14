@@ -58,6 +58,26 @@ export interface SendAck {
   note?: string;
 }
 
+/**
+ * Contact pairing: the joiner dials the inviter's ticket and presents the
+ * invite secret. The connection itself carries both public keys, so a valid
+ * secret plus mutual name exchange is the whole handshake.
+ */
+export interface PairRequest {
+  t: "pair?";
+  secret: string;
+  name: string;
+  device: string;
+}
+
+export interface PairReply {
+  t: "pair";
+  ok: boolean;
+  name?: string;
+  device?: string;
+  error?: string;
+}
+
 export interface StatusReply {
   t: "status";
   name: string;
@@ -67,7 +87,7 @@ export interface StatusReply {
   git: GitState;
 }
 
-export type Envelope = PresenceBeacon | StatusRequest | StatusReply | AskRequest | AskReply | SendMsg | SendAck;
+export type Envelope = PresenceBeacon | StatusRequest | StatusReply | AskRequest | AskReply | SendMsg | SendAck | PairRequest | PairReply;
 
 export function encode(e: Envelope): number[] {
   const bytes = [...new TextEncoder().encode(JSON.stringify(e))];
