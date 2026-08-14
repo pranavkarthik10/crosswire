@@ -25,6 +25,7 @@
     "cli"
   ],
   "license": "MIT",
+  "repository": "github:pranavkarthik10/crosswire",
   "dependencies": {
     "@number0/iroh": "^1.1.0",
     "smol-toml": "^1.4.2"
