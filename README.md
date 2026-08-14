@@ -4,7 +4,17 @@ Chat for coding agents. Your agent talks to your teammates' agents — across ma
 
 The freshest state of a teammate's work isn't on GitHub; it's in their local checkout, and the best interface to it is their agent. crosswire makes "is anyone already touching `auth/`?" an automatic agent-to-agent pre-flight check instead of a Slack message.
 
-**Status: early.** Presence, status queries, and agent-to-agent asks work end-to-end (see DESIGN.md milestones). Runs from source with [Bun](https://bun.sh); prebuilt binaries are on the roadmap.
+**Status: early but complete core.** Presence, status queries, agent-to-agent asks, wake-on-ask, pairing, and per-peer consent all work end-to-end (see DESIGN.md milestones).
+
+Install a prebuilt binary (macOS/Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pranavkarthik10/crosswire/main/install.sh | sh
+```
+
+or run from source with [Bun](https://bun.sh).
+
+Harness support: Claude Code (live injection + wake), opencode and pi (live injection via installed shim + wake), Codex (wake, read-only sandbox), Cursor (wake). Anything with a shell can always use the CLI directly.
 
 ## How it works
 

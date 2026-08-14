@@ -17,7 +17,7 @@
 // from inside a Claude Code session, the session's messaging inbox is
 // registered with the daemon so incoming asks can be injected into it.
 
-import { openSync } from "node:fs";
+import { mkdirSync, openSync } from "node:fs";
 import { join } from "node:path";
 import { Daemon } from "./daemon";
 import { collectGitState } from "./gitstate";
@@ -107,6 +107,11 @@ async function ensureDaemon(): Promise<void> {
   } catch {
     // not running (or stale socket) — spawn it
   }
+  if (!loadIdentity(cfg)) {
+    console.error("no identity yet — run `crosswire init` first (in your repo, so teammates can find you)");
+    process.exit(1);
+  }
+  mkdirSync(cfg, { recursive: true });
   const log = openSync(join(cfg, "daemon.log"), "a");
   Bun.spawn(daemonArgv(), {
     cwd: process.cwd(),

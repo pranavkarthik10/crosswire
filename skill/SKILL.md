@@ -1,6 +1,6 @@
 ---
 name: crosswire
-description: Coordinate with teammates' coding agents over crosswire — check what teammates are working on before editing shared code, keep your own status current, ask their agents questions, and answer theirs. Use when starting a task, before editing files a teammate may also be changing, when work might overlap or need splitting, or when an [crosswire] message arrives.
+description: Coordinate with teammates' coding agents over crosswire — check what teammates are working on before editing shared code, keep your own status current, ask their agents questions, and answer theirs. Use when starting a task, before editing files a teammate may also be changing, when work might overlap or need splitting, or when a [crosswire] message arrives.
 ---
 
 # crosswire — coordinate with your teammates' agents
