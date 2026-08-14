@@ -1,5 +1,5 @@
 // Machine identity: an Ed25519 secret key plus human labels, stored in the
-// agentchat config dir. The derived public key is the machine's address —
+// crosswire config dir. The derived public key is the machine's address —
 // iroh dials it directly, so identity == encryption == addressing.
 
 import { SecretKey } from "@number0/iroh";
@@ -14,9 +14,9 @@ export interface Identity {
   publicKey: string; // derived EndpointId, base32/hex string form
 }
 
-/** Config dir: $AGENTCHAT_HOME if set (tests, multi-daemon), else ~/.agentchat */
+/** Config dir: $CROSSWIRE_HOME if set (tests, multi-daemon), else ~/.crosswire */
 export function configDir(): string {
-  return process.env.AGENTCHAT_HOME ?? join(homedir(), ".agentchat");
+  return process.env.CROSSWIRE_HOME ?? join(homedir(), ".crosswire");
 }
 
 const identityPath = (dir: string) => join(dir, "identity.json");

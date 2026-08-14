@@ -5,9 +5,9 @@
 //   {"type":"user","message":{"role":"user","content":"<text>"}}
 //
 // The socket+token pair is captured by the CLI when an agent session runs any
-// agentchat command (the env vars are exported to its Bash tool), and
+// crosswire command (the env vars are exported to its Bash tool), and
 // registered with the daemon. Injection is best-effort: on failure the
-// message stays in the inbox and the skill has agents check `agentchat inbox`.
+// message stays in the inbox and the skill has agents check `crosswire inbox`.
 
 export interface RegisteredSession {
   harness: "claude-code";

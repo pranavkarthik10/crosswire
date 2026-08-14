@@ -33,7 +33,7 @@ describe("roster", () => {
     addToTeamRoster(dir, a);
     addToTeamRoster(dir, b);
     expect(loadTeamRoster(dir)).toEqual([a, b]);
-    expect(fs.existsSync(path.join(dir, ".agentchat", "peers.toml"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, ".crosswire", "peers.toml"))).toBe(true);
 
     addContact(dir, a);
     expect(loadContacts(dir)).toEqual([a]);
@@ -72,7 +72,7 @@ describe("roster", () => {
   });
 
   test("corrupt file throws an error mentioning the path", () => {
-    const file = path.join(dir, ".agentchat", "peers.toml");
+    const file = path.join(dir, ".crosswire", "peers.toml");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "[[peer]\nname = broken");
     expect(() => loadTeamRoster(dir)).toThrow(file);

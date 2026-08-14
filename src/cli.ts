@@ -1,16 +1,16 @@
 #!/usr/bin/env bun
-// The `agentchat` CLI.
+// The `crosswire` CLI.
 //
-//   agentchat init [--name <n>] [--device <d>]   identity + team roster entry
-//   agentchat id                                 print this machine's identity
-//   agentchat status [peer]                      presence, or one peer's live status
-//   agentchat ask <peer> "<question>"            ask a peer's live agent (blocks for the answer)
-//   agentchat send <peer> "<text>"               fire-and-forget message
-//   agentchat inbox                              queued incoming messages, newest first
-//   agentchat reply <id> "<answer>"              answer a pending ask
-//   agentchat set-status "<line>"                authored status line ("" clears)
-//   agentchat install [--project]                install the skill into detected harnesses
-//   agentchat daemon                             run the daemon in the foreground
+//   crosswire init [--name <n>] [--device <d>]   identity + team roster entry
+//   crosswire id                                 print this machine's identity
+//   crosswire status [peer]                      presence, or one peer's live status
+//   crosswire ask <peer> "<question>"            ask a peer's live agent (blocks for the answer)
+//   crosswire send <peer> "<text>"               fire-and-forget message
+//   crosswire inbox                              queued incoming messages, newest first
+//   crosswire reply <id> "<answer>"              answer a pending ask
+//   crosswire set-status "<line>"                authored status line ("" clears)
+//   crosswire install [--project]                install the skill into detected harnesses
+//   crosswire daemon                             run the daemon in the foreground
 //
 // Commands talk to the daemon over its control socket and auto-spawn it
 // (detached, logging to <cfg>/daemon.log) when it isn't running. When run
@@ -115,7 +115,7 @@ const age = (sec: number | null) => (sec === null ? "never" : sec < 60 ? `${sec}
 
 function printPresence(rows: PresenceRow[]) {
   if (rows.length === 0) {
-    console.log("no peers — add teammates to .agentchat/peers.toml (or pair a contact)");
+    console.log("no peers — add teammates to .crosswire/peers.toml (or pair a contact)");
     return;
   }
   for (const r of rows) {
@@ -153,8 +153,8 @@ switch (cmd) {
     if (repoRoot) {
       addToTeamRoster(repoRoot, { name: identity.name, device: identity.device, key: identity.publicKey });
       const roster = loadTeamRoster(repoRoot);
-      console.log(`team:     added to ${join(repoRoot, ".agentchat/peers.toml")} (${roster.length} member${roster.length === 1 ? "" : "s"})`);
-      console.log(`\ncommit .agentchat/peers.toml so teammates can reach you.`);
+      console.log(`team:     added to ${join(repoRoot, ".crosswire/peers.toml")} (${roster.length} member${roster.length === 1 ? "" : "s"})`);
+      console.log(`\ncommit .crosswire/peers.toml so teammates can reach you.`);
     } else {
       console.log(`(not in a git repo — no team roster written; run init again inside one, identity is reused)`);
     }
@@ -164,7 +164,7 @@ switch (cmd) {
   case "id": {
     const identity = loadIdentity(cfg);
     if (!identity) {
-      console.error("no identity — run `agentchat init`");
+      console.error("no identity — run `crosswire init`");
       process.exit(1);
     }
     console.log(`${identity.name}@${identity.device}`);
@@ -174,7 +174,7 @@ switch (cmd) {
 
   case "daemon": {
     const daemon = await Daemon.start();
-    console.log(`agentchat daemon up: ${daemon.identity.name}@${daemon.identity.device} in ${daemon.workDir}`);
+    console.log(`crosswire daemon up: ${daemon.identity.name}@${daemon.identity.device} in ${daemon.workDir}`);
     console.log(`key: ${daemon.key}`);
     await new Promise(() => {}); // run forever
     break;
@@ -184,7 +184,7 @@ switch (cmd) {
     const [peer, ...q] = rest;
     const question = q.join(" ").trim();
     if (!peer || !question) {
-      console.error('usage: agentchat ask <peer> "<question>"');
+      console.error('usage: crosswire ask <peer> "<question>"');
       process.exit(1);
     }
     await ensureDaemon();
@@ -203,7 +203,7 @@ switch (cmd) {
     const [peer, ...t] = rest;
     const text = t.join(" ").trim();
     if (!peer || !text) {
-      console.error('usage: agentchat send <peer> "<text>"');
+      console.error('usage: crosswire send <peer> "<text>"');
       process.exit(1);
     }
     await ensureDaemon();
@@ -234,7 +234,7 @@ switch (cmd) {
       const when = age(Math.round((Date.now() - m.ts) / 1000));
       console.log(`${m.read ? " " : "•"} [${flag}] ${m.id} ${m.from} (${when}): ${m.text}`);
     }
-    console.log(`\nanswer an open ask with: agentchat reply <id> "<answer>"`);
+    console.log(`\nanswer an open ask with: crosswire reply <id> "<answer>"`);
     break;
   }
 
@@ -242,7 +242,7 @@ switch (cmd) {
     const [id, ...a] = rest;
     const answer = a.join(" ").trim();
     if (!id || !answer) {
-      console.error('usage: agentchat reply <id> "<answer>"');
+      console.error('usage: crosswire reply <id> "<answer>"');
       process.exit(1);
     }
     await ensureDaemon();
@@ -292,6 +292,6 @@ switch (cmd) {
   }
 
   default:
-    console.log('usage: agentchat <init|id|status [peer]|ask|send|inbox|reply|set-status|install|daemon>');
+    console.log('usage: crosswire <init|id|status [peer]|ask|send|inbox|reply|set-status|install|daemon>');
     process.exit(cmd ? 1 : 0);
 }

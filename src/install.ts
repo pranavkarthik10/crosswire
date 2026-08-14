@@ -1,4 +1,4 @@
-// `agentchat install` — copy the skill into detected harnesses.
+// `crosswire install` — copy the skill into detected harnesses.
 //
 // That is all install does: the CLI is the only integration surface, so
 // "integrating" a harness means teaching its agent the habits. Claude Code
@@ -16,9 +16,9 @@ export function installSkill(opts: { project?: boolean } = {}): void {
   const targets: { harness: string; dir: string }[] = [];
 
   if (opts.project) {
-    targets.push({ harness: "claude-code (project)", dir: join(process.cwd(), ".claude", "skills", "agentchat") });
+    targets.push({ harness: "claude-code (project)", dir: join(process.cwd(), ".claude", "skills", "crosswire") });
   } else if (existsSync(join(homedir(), ".claude"))) {
-    targets.push({ harness: "claude-code", dir: join(homedir(), ".claude", "skills", "agentchat") });
+    targets.push({ harness: "claude-code", dir: join(homedir(), ".claude", "skills", "crosswire") });
   }
 
   if (targets.length === 0) {

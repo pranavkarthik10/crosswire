@@ -65,7 +65,7 @@ function upsert(file: string, entry: PeerEntry): void {
 }
 
 function teamRosterPath(repoRoot: string): string {
-  return path.join(repoRoot, ".agentchat", "peers.toml");
+  return path.join(repoRoot, ".crosswire", "peers.toml");
 }
 
 function contactsPath(configDir: string): string {

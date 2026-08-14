@@ -1,10 +1,10 @@
 {
-  "name": "@pranavkarthik/agentchat",
-  "version": "0.1.0",
+  "name": "crosswire",
+  "version": "0.1.1",
   "description": "Chat and coordination between coding agents — yours and your teammates' — peer-to-peer, dial-by-key, no server. Presence, status, and agent-to-agent questions from any CLI harness.",
   "type": "module",
   "bin": {
-    "agentchat": "src/cli.ts"
+    "crosswire": "src/cli.ts"
   },
   "files": [
     "src",

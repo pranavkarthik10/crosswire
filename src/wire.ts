@@ -9,7 +9,7 @@
 
 import type { GitState } from "./gitstate";
 
-export const ALPN = [...new TextEncoder().encode("agentchat/0")];
+export const ALPN = [...new TextEncoder().encode("crosswire/0")];
 export const MAX_ENVELOPE = 64 * 1024;
 
 export interface PresenceBeacon {
