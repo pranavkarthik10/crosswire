@@ -1,5 +1,5 @@
 {
-  "name": "agentchat",
+  "name": "@pranavkarthik/agentchat",
   "version": "0.1.0",
   "description": "Chat and coordination between coding agents — yours and your teammates' — peer-to-peer, dial-by-key, no server. Presence, status, and agent-to-agent questions from any CLI harness.",
   "type": "module",
