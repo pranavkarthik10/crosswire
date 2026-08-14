@@ -16,7 +16,7 @@ const peer = (over: Partial<TuiPresenceRow> = {}): TuiPresenceRow => ({
   key: "k1",
   online: true,
   lastSeenSec: null,
-  beacon: { branch: "feat/refunds", repo: "repo-b", dirtyCount: 2, statusLine: "refactoring auth", ts: 0 },
+  beacon: { statusLine: "refactoring auth", ts: 0 },
   ...over,
 });
 
@@ -70,9 +70,9 @@ describe("formatHeader", () => {
 });
 
 describe("formatPresenceRow", () => {
-  test("online with full beacon", () => {
+  test("online with status line", () => {
     const row = formatPresenceRow(peer(), 80);
-    expect(stripAnsi(row)).toBe('● bob@thinkpad  repo-b@feat/refunds  (2 dirty)  — "refactoring auth"');
+    expect(stripAnsi(row)).toBe('● bob@thinkpad  — "refactoring auth"');
     expect(row).toContain("\x1b[32m"); // green dot
   });
   test("offline shows dim ○ and seen age", () => {
@@ -83,9 +83,9 @@ describe("formatPresenceRow", () => {
   test("offline never seen", () => {
     expect(stripAnsi(formatPresenceRow(peer({ online: false, beacon: null }), 80))).toBe("○ bob@thinkpad  never");
   });
-  test("clean beacon omits dirty count", () => {
-    const b = { branch: "main", repo: "r", dirtyCount: 0, statusLine: null, ts: 0 };
-    expect(stripAnsi(formatPresenceRow(peer({ beacon: b }), 80))).toBe("● bob@thinkpad  r@main");
+  test("beacon without status line is plain", () => {
+    const b = { statusLine: null, ts: 0 };
+    expect(stripAnsi(formatPresenceRow(peer({ beacon: b }), 80))).toBe("● bob@thinkpad");
   });
   test("truncates to width", () => {
     expect(stripAnsi(formatPresenceRow(peer(), 20)).length).toBeLessThanOrEqual(20);

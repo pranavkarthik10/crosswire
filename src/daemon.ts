@@ -14,7 +14,7 @@ import { Endpoint, EndpointAddr, EndpointId, type Connection, setLogLevel, LogLe
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { collectGitState } from "./gitstate";
 import { configDir, loadIdentity, type Identity } from "./identity";
 import { injectClaude, type RegisteredSession } from "./inject";
@@ -134,15 +134,13 @@ export class Daemon {
         `dial ${st.entry.name}`,
       );
     }
-    const git = await collectGitState(this.activeRepo() ?? process.cwd());
+    // broadcast only the non-derivable: liveness + authored status.
+    // Facts (git state, agent activity) are pulled via status? on demand.
     const beacon: PresenceBeacon = {
       t: "presence",
       name: this.identity.name,
       device: this.identity.device,
       ts: Date.now(),
-      branch: git.branch,
-      repo: git.repoRoot ? basename(git.repoRoot) : null,
-      dirtyCount: git.dirtyFiles.length,
       statusLine: this.statusLine,
     };
     const uni = await st.conn.openUni();
@@ -392,13 +390,15 @@ export class Daemon {
   }
 
   private async localStatus(): Promise<StatusReply> {
+    const repo = this.activeRepo();
     return {
       t: "status",
       name: this.identity.name,
       device: this.identity.device,
       ts: Date.now(),
       statusLine: this.statusLine,
-      git: await collectGitState(this.activeRepo() ?? process.cwd()),
+      agentActive: repo ? sessionsForRepo(repo).some((s) => s.kind === "interactive") : false,
+      git: await collectGitState(repo ?? process.cwd()),
     };
   }
 

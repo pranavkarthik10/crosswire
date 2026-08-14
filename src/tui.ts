@@ -9,9 +9,6 @@
 // ---- protocol shapes (mirror the daemon's replies) ----
 
 export interface TuiBeacon {
-  branch: string | null;
-  repo: string | null;
-  dirtyCount: number;
   statusLine: string | null;
   ts: number;
 }
@@ -116,8 +113,8 @@ export function formatHeader(name: string, device: string, repoCount: number, wi
 /** One peer row: green ● online / dim ○ offline, truncated to `width`. */
 export function formatPresenceRow(r: TuiPresenceRow, width: number): string {
   const b = r.beacon;
-  const where = b?.repo ? `  ${b.repo}${b.branch ? `@${b.branch}` : ""}` : "";
-  const dirty = b && b.dirtyCount > 0 ? `  (${b.dirtyCount} dirty)` : "";
+  const where = "";
+  const dirty = "";
   const status = b?.statusLine ? `  — "${b.statusLine}"` : "";
   const seen = r.online ? "" : r.lastSeenSec === null ? "  never" : `  seen ${formatAge(r.lastSeenSec)}`;
   const body = truncate(`${r.name}@${r.device}${where}${dirty}${status}${seen}`, Math.max(0, width - 2));

@@ -67,14 +67,11 @@ Trust model: the roster is trusted because the repo is trusted — the same reas
 
 ### Channels & presence (the Discord model)
 
-A team roster = a channel. Members' daemons exchange small presence beacons: online/offline, per-agent activity (active/idle, harness name), current branch, recently-touched paths, and an **agent-authored status line** (via `set_status`). The TUI renders the sidebar: who's around, what they're on — glanceable, like Discord voice channels. Contacts appear in a `@direct` section of the same sidebar.
+A team roster = a channel. Members' daemons exchange small presence beacons, and the TUI renders the sidebar: who's around, what they say they're on — glanceable, like Discord voice channels. Contacts appear in a `@direct` section of the same sidebar.
+
+**Push intent, pull facts.** The beacon carries only what cannot be derived: liveness and the **agent-authored status line** (`set-status`). Deterministic state — branch, dirty files, recent commits, whether an agent session is live — is never broadcast; it's redundant (any peer can pull it on demand with a `status` query the daemon answers instantly from git) and broadcasting it would leak workspace detail to every roster peer, contacts included. Pulling also leaves room for a per-peer *sharing* policy later, mirroring the inbound policy that already exists.
 
 Presence is **full-mesh, not gossip**: each daemon holds a QUIC connection to every online roster peer and sends beacons on it directly. At the target scale (≤5 people) this is simpler and lower-latency than epidemic gossip, and it's forced anyway — the iroh Node bindings (1.1.0) don't expose `iroh-gossip`. The M0 spike validated a 3-peer mesh converging within two heartbeats from nothing but a roster of keys.
-
-Presence is two-layered by design:
-
-- **derived** — published automatically by the daemon from local git + session state; can't go stale or lie by omission;
-- **authored** — one line the agent sets when it starts/finishes a task ("refactoring session auth, touching `src/auth/*`"). Adds intent that git state can't show.
 
 ### Messages & queries
 

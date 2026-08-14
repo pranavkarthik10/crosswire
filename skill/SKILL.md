@@ -27,11 +27,12 @@ Update it when the task changes; clear it when done: `crosswire set-status ""`.
 crosswire status
 ```
 
-`●` peers are online; each row shows their repo, branch, dirty-file count and
-their agent's status line. If someone's status suggests overlap with what you
-are about to do, look closer (`crosswire status <name>` shows their live
-branch, dirty files and recent commits — fresher than anything pushed), and
-prefer asking over assuming:
+`●` peers are online; each row shows the status line their agent chose to
+share — presence carries intent, not git state. For the facts, pull them:
+`crosswire status <name>` returns their live branch, dirty files, recent
+commits and whether their agent is active right now — fresher than anything
+pushed. If either suggests overlap with what you are about to do, prefer
+asking over assuming:
 
 ```
 crosswire ask john "are you already changing the session middleware? I'm about to touch src/auth/session.ts"

@@ -144,16 +144,14 @@ function printPresence(rows: PresenceRow[]) {
   for (const r of rows) {
     const dot = r.online ? "●" : "○";
     const b = r.beacon;
-    const where = b?.repo ? ` ${b.repo}${b.branch ? `@${b.branch}` : ""}` : "";
-    const dirty = b && b.dirtyCount > 0 ? ` (${b.dirtyCount} dirty)` : "";
     const status = b?.statusLine ? ` — "${b.statusLine}"` : "";
     const seen = r.online ? "" : ` (seen ${age(r.lastSeenSec)})`;
-    console.log(`${dot} ${r.name}@${r.device}${where}${dirty}${status}${seen}`);
+    console.log(`${dot} ${r.name}@${r.device}${status}${seen}`);
   }
 }
 
 function printStatus(s: StatusReply) {
-  console.log(`${s.name}@${s.device}${s.statusLine ? ` — "${s.statusLine}"` : ""}`);
+  console.log(`${s.name}@${s.device}${s.statusLine ? ` — "${s.statusLine}"` : ""}${s.agentActive ? "  [agent active]" : ""}`);
   if (!s.git.repoRoot) {
     console.log("  (not in a git repo)");
     return;

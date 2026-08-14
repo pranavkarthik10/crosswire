@@ -12,15 +12,18 @@ import type { GitState } from "./gitstate";
 export const ALPN = [...new TextEncoder().encode("crosswire/0")];
 export const MAX_ENVELOPE = 64 * 1024;
 
+/**
+ * Broadcast carries only what cannot be derived: liveness and the
+ * agent-authored status line. Deterministic facts (branch, dirty files,
+ * agent activity) are never broadcast — peers pull them on demand with
+ * `status?`, which the daemon answers instantly from local state.
+ */
 export interface PresenceBeacon {
   t: "presence";
   name: string;
   device: string;
   ts: number; // sender clock, ms epoch
-  branch: string | null;
-  repo: string | null; // repo dir basename, not full path
-  dirtyCount: number;
-  statusLine: string | null; // agent-authored, null until M2's set_status
+  statusLine: string | null; // agent-authored via set-status
 }
 
 export interface StatusRequest {
@@ -84,6 +87,7 @@ export interface StatusReply {
   device: string;
   ts: number;
   statusLine: string | null;
+  agentActive: boolean; // a live agent session is open in the repo right now
   git: GitState;
 }
 
