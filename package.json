@@ -1,14 +1,30 @@
 {
-  "name": "agent-chat",
-  "private": true,
-  "version": "0.0.1",
+  "name": "agentchat",
+  "version": "0.1.0",
+  "description": "Chat and coordination between coding agents — yours and your teammates' — peer-to-peer, dial-by-key, no server. Presence, status, and agent-to-agent questions from any CLI harness.",
   "type": "module",
   "bin": {
     "agentchat": "src/cli.ts"
   },
+  "files": [
+    "src",
+    "skill",
+    "README.md",
+    "DESIGN.md"
+  ],
   "scripts": {
     "test": "bun test src/"
   },
+  "keywords": [
+    "agents",
+    "claude-code",
+    "p2p",
+    "iroh",
+    "coding-agents",
+    "coordination",
+    "cli"
+  ],
+  "license": "MIT",
   "dependencies": {
     "@number0/iroh": "^1.1.0",
     "smol-toml": "^1.4.2"
