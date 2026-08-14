@@ -18,6 +18,9 @@ import { collectGitState } from "./gitstate";
 import { configDir, loadIdentity, type Identity } from "./identity";
 import { injectClaude, type RegisteredSession } from "./inject";
 import { visiblePeers, type PeerEntry } from "./roster";
+import { sessionsForRepo, discoverSessions } from "./sessions";
+import { appendInbox, loadInbox, loadRepos, touchRepo, updateInbox } from "./store";
+import { wakeAndAsk } from "./wake";
 import { ALPN, MAX_ENVELOPE, decode, encode, type AskReply, type Envelope, type PresenceBeacon, type StatusReply } from "./wire";
 
 const PRESENCE_INTERVAL_MS = 3_000;
@@ -65,20 +68,20 @@ export class Daemon {
   private pendingAsks = new Map<string, (reply: AskReply) => void>();
   private constructor(
     readonly identity: Identity,
-    readonly workDir: string,
     readonly cfgDir: string,
     private ep: Endpoint,
-    private repoRoot: string | null,
   ) {}
 
-  static async start(opts: { workDir?: string; cfgDir?: string } = {}): Promise<Daemon> {
+  static async start(opts: { cfgDir?: string } = {}): Promise<Daemon> {
     const cfgDir = opts.cfgDir ?? configDir();
-    const workDir = opts.workDir ?? process.cwd();
     const identity = loadIdentity(cfgDir);
     if (!identity) throw new Error(`no identity in ${cfgDir} — run \`crosswire init\` first`);
     const ep = await Endpoint.bind({ alpns: [ALPN], secretKey: identity.secretKey });
-    const repoRoot = (await collectGitState(workDir)).repoRoot;
-    const daemon = new Daemon(identity, workDir, cfgDir, ep, repoRoot);
+    const daemon = new Daemon(identity, cfgDir, ep);
+    // the daemon serves every registered repo; started inside one, register it
+    const cwdRepo = (await collectGitState(process.cwd())).repoRoot;
+    if (cwdRepo) touchRepo(cfgDir, cwdRepo);
+    daemon.inbox = loadInbox(cfgDir, INBOX_CAP);
     daemon.acceptLoop();
     daemon.meshTick();
     setInterval(() => daemon.meshTick(), PRESENCE_INTERVAL_MS).unref?.();
@@ -90,8 +93,20 @@ export class Daemon {
     return this.identity.publicKey;
   }
 
+  /** Most-recently-used registered repo — what presence and status speak for. */
+  private activeRepo(): string | null {
+    return loadRepos(this.cfgDir)[0]?.root ?? null;
+  }
+
+  /** Union of every registered repo's team roster plus contacts. */
   private rosterNow(): PeerEntry[] {
-    return visiblePeers({ repoRoot: this.repoRoot, configDir: this.cfgDir, selfKey: this.key });
+    const seen = new Map<string, PeerEntry>();
+    for (const { root } of loadRepos(this.cfgDir))
+      for (const p of visiblePeers({ repoRoot: root, configDir: this.cfgDir, selfKey: this.key }))
+        if (!seen.has(p.key)) seen.set(p.key, p);
+    for (const p of visiblePeers({ repoRoot: null, configDir: this.cfgDir, selfKey: this.key }))
+      if (!seen.has(p.key)) seen.set(p.key, p);
+    return [...seen.values()];
   }
 
   // ---- outbound mesh ----
@@ -116,7 +131,7 @@ export class Daemon {
         `dial ${st.entry.name}`,
       );
     }
-    const git = await collectGitState(this.workDir);
+    const git = await collectGitState(this.activeRepo() ?? process.cwd());
     const beacon: PresenceBeacon = {
       t: "presence",
       name: this.identity.name,
@@ -203,16 +218,39 @@ export class Daemon {
   private enqueue(item: InboxItem) {
     this.inbox.push(item);
     if (this.inbox.length > INBOX_CAP) this.inbox.splice(0, this.inbox.length - INBOX_CAP);
+    appendInbox(this.cfgDir, item);
   }
 
-  /** Best-effort injection into the most recently registered live session. */
+  private persistInbox() {
+    updateInbox(this.cfgDir, this.inbox);
+  }
+
+  /**
+   * Best-effort injection: live sessions discovered from Claude Code's own
+   * on-disk registry (repo-matched first, then any), then any explicitly
+   * registered ones. No prior crosswire use by the session is needed.
+   */
   private async tryInject(text: string): Promise<boolean> {
-    for (let i = this.sessions.length - 1; i >= 0; i--) {
+    // Only sessions with the repo's context: discovered ones whose cwd is in
+    // the active repo, plus any that explicitly registered (ran the CLI here).
+    // A session in an unrelated project is the wrong place for the question —
+    // wake-on-ask handles the nobody-relevant case instead.
+    const repo = this.activeRepo();
+    const discovered = repo ? sessionsForRepo(repo).filter((s) => s.kind === "interactive") : [];
+    const seen = new Set<string>();
+    const candidates: RegisteredSession[] = [];
+    for (const s of discovered) {
+      if (seen.has(s.socket)) continue;
+      seen.add(s.socket);
+      candidates.push({ harness: "claude-code", socket: s.socket, token: s.token, registeredAt: s.startedAt });
+    }
+    for (const s of [...this.sessions].reverse()) if (!seen.has(s.socket)) candidates.push(s);
+    for (const c of candidates) {
       try {
-        await injectClaude(this.sessions[i], text);
+        await injectClaude(c, text);
         return true;
       } catch {
-        this.sessions.splice(i, 1); // gone — forget it
+        this.sessions = this.sessions.filter((s) => s.socket !== c.socket);
       }
     }
     return false;
@@ -228,7 +266,18 @@ export class Daemon {
       `Only answer questions — do not take actions on the asker's behalf.`;
     const injected = await this.tryInject(prompt);
     if (!injected) {
-      return { t: "ask-reply", id, ok: false, answer: null, error: "no live agent session here — question queued to inbox" };
+      // nobody live — wake a read-only agent in the repo for a real answer
+      const repo = this.activeRepo();
+      if (!repo) return { t: "ask-reply", id, ok: false, answer: null, error: "no live agent session and no registered repo — question queued to inbox" };
+      const woken = await wakeAndAsk({ repoRoot: repo, from, question, timeoutMs: ASK_TIMEOUT_MS - 10_000 });
+      const item = this.inbox.find((i) => i.id === id);
+      if (item && woken.ok) {
+        item.answered = true;
+        item.read = true;
+        this.persistInbox();
+      }
+      if (woken.ok) return { t: "ask-reply", id, ok: true, answer: `${woken.answer}\n\n(answered by a woken read-only agent — no live session)` };
+      return { t: "ask-reply", id, ok: false, answer: null, error: `no live session; wake-on-ask failed: ${woken.error}` };
     }
     return await new Promise<AskReply>((resolve) => {
       const timer = setTimeout(() => {
@@ -272,7 +321,7 @@ export class Daemon {
       device: this.identity.device,
       ts: Date.now(),
       statusLine: this.statusLine,
-      git: await collectGitState(this.workDir),
+      git: await collectGitState(this.activeRepo() ?? process.cwd()),
     };
   }
 
@@ -339,7 +388,7 @@ export class Daemon {
       const req = JSON.parse(line);
       switch (req.cmd) {
         case "ping":
-          return { ok: true, key: this.key, name: this.identity.name, device: this.identity.device, workDir: this.workDir };
+          return { ok: true, key: this.key, name: this.identity.name, device: this.identity.device, repos: loadRepos(this.cfgDir).map((r) => r.root) };
         case "presence":
           return { ok: true, presence: this.presence() };
         case "status":
@@ -371,7 +420,10 @@ export class Daemon {
         }
         case "inbox": {
           const items = this.inbox.slice().reverse(); // newest first
-          if (req.markRead) for (const i of this.inbox) i.read = true;
+          if (req.markRead) {
+            for (const i of this.inbox) i.read = true;
+            this.persistInbox();
+          }
           return { ok: true, inbox: items };
         }
         case "reply": {
@@ -381,6 +433,7 @@ export class Daemon {
           if (item) {
             item.answered = true;
             item.read = true;
+            this.persistInbox();
           }
           if (!pending) return { ok: false, error: `no pending ask ${req.id} (asker may have timed out)` };
           pending({ t: "ask-reply", id: req.id, ok: true, answer: req.answer.slice(0, 8000) });

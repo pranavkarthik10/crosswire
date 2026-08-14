@@ -23,6 +23,7 @@ import { Daemon } from "./daemon";
 import { collectGitState } from "./gitstate";
 import { configDir, createIdentity, loadIdentity } from "./identity";
 import { addToTeamRoster, loadTeamRoster } from "./roster";
+import { touchRepo } from "./store";
 import type { PresenceRow } from "./daemon";
 import type { StatusReply } from "./wire";
 
@@ -74,8 +75,15 @@ function controlRequest(req: object, timeoutMs = 15_000): Promise<any> {
   });
 }
 
-/** Runs inside an agent session? Register its inbox so asks can reach it. */
-async function registerSessionIfAny(): Promise<void> {
+/**
+ * Make this context automatically reachable: record the repo we're in (the
+ * daemon serves every registered repo), and if we're inside an agent session,
+ * register its inbox too (a fallback — sessions are normally discovered from
+ * Claude Code's own registry without this).
+ */
+async function registerContext(): Promise<void> {
+  const repoRoot = (await collectGitState(process.cwd())).repoRoot;
+  if (repoRoot) touchRepo(cfg, repoRoot);
   const socket = process.env.CLAUDE_CODE_MESSAGING_SOCKET;
   const token = process.env.CLAUDE_CODE_MESSAGING_TOKEN;
   if (!socket || !token) return;
@@ -151,6 +159,7 @@ switch (cmd) {
     console.log(`key:      ${identity.publicKey}`);
     const repoRoot = (await collectGitState(process.cwd())).repoRoot;
     if (repoRoot) {
+      touchRepo(cfg, repoRoot); // the daemon serves every registered repo
       addToTeamRoster(repoRoot, { name: identity.name, device: identity.device, key: identity.publicKey });
       const roster = loadTeamRoster(repoRoot);
       console.log(`team:     added to ${join(repoRoot, ".crosswire/peers.toml")} (${roster.length} member${roster.length === 1 ? "" : "s"})`);
@@ -174,7 +183,7 @@ switch (cmd) {
 
   case "daemon": {
     const daemon = await Daemon.start();
-    console.log(`crosswire daemon up: ${daemon.identity.name}@${daemon.identity.device} in ${daemon.workDir}`);
+    console.log(`crosswire daemon up: ${daemon.identity.name}@${daemon.identity.device}`);
     console.log(`key: ${daemon.key}`);
     await new Promise(() => {}); // run forever
     break;
@@ -188,7 +197,7 @@ switch (cmd) {
       process.exit(1);
     }
     await ensureDaemon();
-    await registerSessionIfAny();
+    await registerContext();
     console.error(`asking ${peer}'s agent (may take a minute or two)…`);
     const res = await controlRequest({ cmd: "ask", peer, question }, 140_000);
     if (!res.ok) {
@@ -207,7 +216,7 @@ switch (cmd) {
       process.exit(1);
     }
     await ensureDaemon();
-    await registerSessionIfAny();
+    await registerContext();
     const res = await controlRequest({ cmd: "send", peer, text }, 20_000);
     if (!res.ok) {
       console.error(`error: ${res.error}`);
@@ -219,7 +228,7 @@ switch (cmd) {
 
   case "inbox": {
     await ensureDaemon();
-    await registerSessionIfAny();
+    await registerContext();
     const res = await controlRequest({ cmd: "inbox", markRead: true });
     if (!res.ok) {
       console.error(`error: ${res.error}`);
@@ -257,7 +266,7 @@ switch (cmd) {
 
   case "set-status": {
     await ensureDaemon();
-    await registerSessionIfAny();
+    await registerContext();
     const res = await controlRequest({ cmd: "set-status", line: rest.join(" ").trim() });
     console.log(res.ok ? "status set" : `error: ${res.error}`);
     break;
@@ -265,7 +274,7 @@ switch (cmd) {
 
   case "status": {
     await ensureDaemon();
-    await registerSessionIfAny();
+    await registerContext();
     const peer = rest.find((a) => !a.startsWith("--"));
     if (peer) {
       const res = await controlRequest({ cmd: "status", peer });
@@ -291,7 +300,19 @@ switch (cmd) {
     break;
   }
 
+  case "service": {
+    const { serviceInstall, serviceUninstall } = await import("./service");
+    const sub = rest[0];
+    if (sub === "install") serviceInstall(join(import.meta.dir, "cli.ts"), join(cfg, "daemon.log"));
+    else if (sub === "uninstall") serviceUninstall();
+    else {
+      console.error("usage: crosswire service <install|uninstall>");
+      process.exit(1);
+    }
+    break;
+  }
+
   default:
-    console.log('usage: crosswire <init|id|status [peer]|ask|send|inbox|reply|set-status|install|daemon>');
+    console.log('usage: crosswire <init|id|status [peer]|ask|send|inbox|reply|set-status|install|service|daemon>');
     process.exit(cmd ? 1 : 0);
 }

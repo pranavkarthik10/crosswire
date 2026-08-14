@@ -12,7 +12,7 @@
 export interface RegisteredSession {
   harness: "claude-code";
   socket: string;
-  token: string;
+  token: string | null; // null → no auth frame; delivery subject to the session's inbound controls
   registeredAt: number;
 }
 
@@ -23,7 +23,7 @@ export async function injectClaude(session: RegisteredSession, text: string): Pr
       unix: session.socket,
       socket: {
         open(socket) {
-          socket.write(JSON.stringify({ type: "auth", token: session.token }) + "\n");
+          if (session.token) socket.write(JSON.stringify({ type: "auth", token: session.token }) + "\n");
           socket.write(JSON.stringify({ type: "user", message: { role: "user", content: text } }) + "\n");
           socket.flush();
           socket.end();
