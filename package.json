@@ -3,7 +3,14 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "bin": {
+    "agentchat": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "bun test src/"
+  },
   "dependencies": {
-    "@number0/iroh": "^1.1.0"
+    "@number0/iroh": "^1.1.0",
+    "smol-toml": "^1.4.2"
   }
 }
