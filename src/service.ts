@@ -18,7 +18,7 @@ function systemdPath() {
   return join(homedir(), ".config", "systemd", "user", "crosswire.service");
 }
 
-export function serviceInstall(cliPath: string, logPath: string): void {
+export function serviceInstall(daemonArgv: string[], logPath: string): void {
   if (process.platform === "darwin") {
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,9 +27,7 @@ export function serviceInstall(cliPath: string, logPath: string): void {
   <key>Label</key><string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${process.execPath}</string>
-    <string>${cliPath}</string>
-    <string>daemon</string>
+${daemonArgv.map((a) => `    <string>${a}</string>`).join("\n")}
   </array>
   <key>WorkingDirectory</key><string>${homedir()}</string>
   <key>RunAtLoad</key><true/>
@@ -53,7 +51,7 @@ export function serviceInstall(cliPath: string, logPath: string): void {
 Description=crosswire daemon
 
 [Service]
-ExecStart=${process.execPath} ${cliPath} daemon
+ExecStart=${daemonArgv.join(" ")}
 Restart=always
 WorkingDirectory=${homedir()}
 

@@ -90,6 +90,16 @@ async function registerContext(): Promise<void> {
   await controlRequest({ cmd: "register-session", socket, token }, 3_000).catch(() => {});
 }
 
+/**
+ * How to start the daemon as a child process. In a compiled binary,
+ * process.execPath IS crosswire (cli.ts lives in the virtual bunfs and can't
+ * be re-invoked by path); from source it's bun + the script.
+ */
+export function daemonArgv(): string[] {
+  const compiled = import.meta.path.startsWith("/$bunfs");
+  return compiled ? [process.execPath, "daemon"] : [process.execPath, join(import.meta.dir, "cli.ts"), "daemon"];
+}
+
 async function ensureDaemon(): Promise<void> {
   try {
     const pong = await controlRequest({ cmd: "ping" }, 2_000);
@@ -98,7 +108,7 @@ async function ensureDaemon(): Promise<void> {
     // not running (or stale socket) — spawn it
   }
   const log = openSync(join(cfg, "daemon.log"), "a");
-  Bun.spawn([process.execPath, import.meta.dir + "/cli.ts", "daemon"], {
+  Bun.spawn(daemonArgv(), {
     cwd: process.cwd(),
     stdout: log,
     stderr: log,
@@ -357,7 +367,7 @@ switch (cmd) {
   case "service": {
     const { serviceInstall, serviceUninstall } = await import("./service");
     const sub = rest[0];
-    if (sub === "install") serviceInstall(join(import.meta.dir, "cli.ts"), join(cfg, "daemon.log"));
+    if (sub === "install") serviceInstall(daemonArgv(), join(cfg, "daemon.log"));
     else if (sub === "uninstall") serviceUninstall();
     else {
       console.error("usage: crosswire service <install|uninstall>");
