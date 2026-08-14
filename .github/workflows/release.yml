@@ -45,3 +45,28 @@ jobs:
         with:
           files: crosswire-*.tar.gz
           generate_release_notes: true
+
+  # Publishes crosswire + 4 platform packages (binary embeds Bun; users need
+  # neither Bun nor Node beyond npm itself). Skipped until the NPM_TOKEN
+  # repository secret (npm automation token) is set.
+  npm:
+    needs: build
+    runs-on: ubuntu-24.04
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: binaries
+      - name: prepare packages
+        run: bun scripts/prepare-npm.ts "${GITHUB_REF_NAME#v}" binaries
+      - name: publish
+        if: env.NPM_TOKEN != ''
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          for p in crosswire-darwin-arm64 crosswire-darwin-x64 crosswire-linux-x64 crosswire-linux-arm64 crosswire; do
+            (cd dist-npm/$p && npm publish --access public)
+          done
